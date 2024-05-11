@@ -28,11 +28,9 @@ async function run() {
         // await client.connect();
         const assignmentCollection = client.db('assignmentDB').collection('assign');
         const submitCollection = client.db('assignmentDB').collection('submit');
-        // =====================================================
+      
 
-        // ok oldone
-
-        // // to find all (read)
+      // to find all (read)
         app.get('/assignment', async (req, res) => {
             const cursor = assignmentCollection.find();
             const result = await cursor.toArray();
@@ -111,11 +109,7 @@ async function run() {
 
         app.get('/submit', async (req, res) => {
             console.log(req.query.email);
-            // console.log('tok tok token', req.cookies.token);
-            // console.log('user in the valid token', req.user);
-            // if(req.query.email !== req.user.email){
-            //     return res.status(403).send({message: 'forbidden access'})
-            // }
+        
             let query = {}
             if(req.query?.email){
                 query = {email:req.query.email}
