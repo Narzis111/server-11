@@ -83,9 +83,13 @@ async function run() {
             
  
         // to find all assignment (read)
-      
+        app.get('/assignment', logger, async (req, res) => {
+            const cursor = assignmentCollection.find();
+            const result = await cursor.toArray();
+            res.send(result);
+        })
 
-        
+
         // // update korbo specific 1ta id ke tai find single params lagbe new lagbe
         // // to find single (read)
         app.get('/assignment/:id', async (req, res) => {
