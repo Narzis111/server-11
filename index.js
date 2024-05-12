@@ -1,14 +1,22 @@
 const express = require('express');
 const cors = require('cors');
-require('dotenv').config();
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
+
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const app = express();
+require('dotenv').config();
 const port = process.env.PORT || 5000;
 
-// middleware
-app.use(cors());
+// middlewares
+app.use(cors({
+    origin: ['http://localhost:5173', 'http://localhost:5174'],
+    credentials: true
+}));
 app.use(express.json());
-console.log(process.env.DB_USER);
+app.use(cookieParser());
+
+
 
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.i8ufgdv.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -21,17 +29,61 @@ const client = new MongoClient(uri, {
         deprecationErrors: true,
     }
 });
+// middleware
+const logger = async (req, res, next) => {
+    console.log('called:', req.host, req.originalUrl)
+    next();
+}
 
+// const verifyToken = async (req, res, next) => {
+//     const token = req.cookies?.token;
+//     console.log(' token er value', token);
+//     if (!token) {
+//         return res.status(401).send({ message: 'unauthorized access' })
+//     }
+//     jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+//         if (err) {
+            
+//             return res.status(401).send({ message: 'unauthorized access' })
+//         }
+//         //if valid decode
+//         console.log('value in the token', decoded); 
+//         req.user = decoded;
+//         next();
+//     })
+// }
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
         // await client.connect();
         const assignmentCollection = client.db('assignmentDB').collection('assign');
         const submitCollection = client.db('assignmentDB').collection('submit');
-      
+        // auth related api
+        app.post('/jwt', logger, async (req, res) => {
+            const user = req.body;
+            console.log(user);
+            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
+                expiresIn: '365d'
+            })
+            // cookie te save
+            res
+                .cookie('token', token, {
+                    httpOnly: true,
+                    secure: false
+                })
+                .send({ success: true })
+            })
 
-      // to find all (read)
-        app.get('/assignment', async (req, res) => {
+            app.post('/logout', async (req, res) => {
+                const user = req.body;
+                console.log('log out', user);
+                res.clearCookie('token', { maxAge: 0 }).send({ success: true })
+            })
+    
+            
+ 
+        // to find all assignment (read)
+        app.get('/assignment', logger, async (req, res) => {
             const cursor = assignmentCollection.find();
             const result = await cursor.toArray();
             res.send(result);
@@ -69,7 +121,7 @@ async function run() {
                     description: update.description,
                     difficulty_level: update.difficulty_level,
                     due_date: update.due_date
-                   
+
                 }
             }
 
@@ -88,35 +140,37 @@ async function run() {
 
         // submit assignment
 
-        
-        // app.delete('/submit/:id', async (req, res) => {
-        //     const id = req.params.id;
-        //     const query = { _id: new ObjectId(id) }
-        //     const result = await submitCollection.deleteOne(query);
-        //     res.send(result);
-        // })
-        // app.get('/submit', async (req, res) => {
-        //     const cursor = submitCollection.find();
-        //     const result = await cursor.toArray();
-        //     res.send(result);
-        // })
-           // to find single user (read)
-        // app.get("/mySubmit/:email", async (req, res) => {
-        //     console.log(req.params.email);
-        //     const result = await submitCollection.find({ email: req.params.email }).toArray();
-        //     res.send(result)
-        // })
 
-        app.get('/submit', async (req, res) => {
-            console.log(req.query.email);
-        
-            let query = {}
-            if(req.query?.email){
-                query = {email:req.query.email}
-            }
-            const result = await submitCollection.find(query).toArray();
+        app.get("/submitPending", async (req, res) => {
+            const result = await submitCollection.find({ status: "Pending" }).toArray();
+            console.log(result);
+            res.json(result);
+
+        });
+        app.get('/submit/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) }
+            const result = await submitCollection.findOne(query);
             res.send(result);
         })
+
+
+
+        app.get('/submit', async (req, res) => {
+            const cursor = submitCollection.find();
+            const result = await cursor.toArray();
+            res.send(result);
+        })
+        app.get("/mySubmit/:email", async (req, res) => {
+            console.log(req.params.email);
+            console.log('valid token user', req.user );
+            // if(req.query.email !== req.user.email){
+            //     return res.status(403).send ({message: 'forbidden'})
+            // }
+            const result = await submitCollection.find({ email: req.params.email }).toArray();
+            res.send(result)
+        })
+
 
         app.post('/submit', async (req, res) => {
             const submitted = req.body;
@@ -124,6 +178,30 @@ async function run() {
             const result = await submitCollection.insertOne(submitted);
             res.send(result);
         });
+
+
+        app.put("/submit/:id", async (req, res) => {
+            const id = req.params.id;
+
+            const { obtained_mark, feedback } = req.body;
+
+
+            const result = await submitCollection.updateOne(
+                { _id: new ObjectId(id) },
+                {
+                    $set: {
+                        status: "Completed",
+                        obtained_mark: obtained_mark,
+                        feedback: feedback
+                    }
+                })
+            res.send(result);
+        })
+
+
+
+
+
 
         // Send a ping to confirm a successful connection
         // await client.db("admin").command({ ping: 1 });
