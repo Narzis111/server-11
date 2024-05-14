@@ -57,7 +57,7 @@ const verifyToken = async (req, res, next) => {
 
 const cookieOption = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production', true : false,
+    secure: process.env.NODE_ENV === 'production', true: false,
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
 
 }
@@ -101,7 +101,7 @@ async function run() {
 
         // // update korbo specific 1ta id ke tai find single params lagbe new lagbe
         // // to find single (read)
-        app.get('/assignment/:id', logger, verifyToken, async (req, res) => {
+        app.get('/assignment/:id', async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) }
             const result = await assignmentCollection.findOne(query);
@@ -117,7 +117,8 @@ async function run() {
         })
         // update specific id 
 
-        app.put('/assignment/:id', async (req, res) => {
+        app.put('/assignment/:id', verifyToken, async (req, res) => {
+            console.log("inside update API");
             const id = req.params.id;
             const filter = { _id: new ObjectId(id) }
             const options = { upsert: true };
@@ -135,6 +136,8 @@ async function run() {
 
                 }
             }
+            const result = await assignmentCollection.updateOne(filter, assign, options);
+            res.send(result);
         });
 
 
@@ -150,7 +153,7 @@ async function run() {
         // submit assignment
 
 
-        app.get("/submitPending", logger, verifyToken, async (req, res) => {
+        app.get("/submitPending", verifyToken, async (req, res) => {
             if (!req.user) {
                 return res.status(401).json({ message: 'Unauthorized' });
             }
@@ -161,7 +164,7 @@ async function run() {
         });
 
 
-        app.get('/submit/:id', logger, verifyToken, async (req, res) => {
+        app.get('/submit/:id', verifyToken, async (req, res) => {
             console.log('valid user', req.user);
 
             // Ensure that only authenticated users can access this route
@@ -179,7 +182,7 @@ async function run() {
 
             res.send(result);
         });
-        app.get('/submit', logger, verifyToken, async (req, res) => {
+        app.get('/submit', verifyToken, async (req, res) => {
             console.log('valid cookies', req.cookies);
             if (!req.user) {
                 return res.status(401).json({ message: 'Unauthorized' });
@@ -188,7 +191,7 @@ async function run() {
             const result = await cursor.toArray();
             res.send(result);
         })
-        app.get("/mySubmit/:email", logger, verifyToken, async (req, res) => {
+        app.get("/mySubmit/:email", verifyToken, async (req, res) => {
             console.log(req.params.email);
             // console.log('valid cookies', req.cookies);
             console.log('valid user', req.user);
