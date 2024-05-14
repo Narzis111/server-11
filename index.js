@@ -10,13 +10,14 @@ const port = process.env.PORT || 5000;
 
 // middlewares
 app.use(cors({
-    origin: ['http://localhost:5173', 'http://localhost:5174'],
+    origin: ['http://localhost:5173',
+        'https://assignment-11-project-c8814.web.app',
+        'https://assignment-11-project-c8814.firebaseapp.com',],
+
     credentials: true
 }));
 app.use(express.json());
 app.use(cookieParser());
-
-
 
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.i8ufgdv.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -31,59 +32,67 @@ const client = new MongoClient(uri, {
 });
 // middleware
 const logger = async (req, res, next) => {
-    console.log('called:', req.host, req.originalUrl)
+    // console.log('called:', req.host, req.originalUrl)
+    console.log('log: info', req.method, req.url);
     next();
 }
 
-// const verifyToken = async (req, res, next) => {
-//     const token = req.cookies?.token;
-//     console.log(' token er value', token);
-//     if (!token) {
-//         return res.status(401).send({ message: 'unauthorized access' })
-//     }
-//     jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
-//         if (err) {
-            
-//             return res.status(401).send({ message: 'unauthorized access' })
-//         }
-//         //if valid decode
-//         console.log('value in the token', decoded); 
-//         req.user = decoded;
-//         next();
-//     })
-// }
+const verifyToken = async (req, res, next) => {
+    const token = req?.cookies?.token;
+    console.log(' token er value', token);
+    if (!token) {
+        return res.status(401).send({ message: 'unauthorized access' })
+    }
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+        if (err) {
+
+            return res.status(401).send({ message: 'unauthorized access' })
+        }
+        //if valid decode
+        console.log('value in the token', decoded);
+        req.user = decoded;
+        next();
+    })
+}
+
+const cookieOption = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production', true : false,
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+
+}
+
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
         // await client.connect();
         const assignmentCollection = client.db('assignmentDB').collection('assign');
         const submitCollection = client.db('assignmentDB').collection('submit');
+        const featuresCollection = client.db('assignmentDB').collection('features');
         // auth related api
         app.post('/jwt', logger, async (req, res) => {
             const user = req.body;
-            console.log(user);
+            console.log('logged in', user);
             const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
                 expiresIn: '365d'
             })
-            // cookie te save
-            res
-                .cookie('token', token, {
-                    httpOnly: true,
-                    secure: false
-                })
-                .send({ success: true })
-            })
 
-            app.post('/logout', async (req, res) => {
-                const user = req.body;
-                console.log('log out', user);
-                res.clearCookie('token', { maxAge: 0 }).send({ success: true })
-            }) 
-    
-            
- 
+
+            res.
+                cookie('token', token, cookieOption).send({ success: true })
+        })
+        app.post('/logout', async (req, res) => {
+            const user = req.body;
+            console.log('logging out', user);
+            res
+                .clearCookie('token', { ...cookieOption, maxAge: 0 }).send({ success: true })
+        })
+
+
+
+
         // to find all assignment (read)
-        app.get('/assignment', logger, async (req, res) => {
+        app.get('/assignment', async (req, res) => {
             const cursor = assignmentCollection.find();
             const result = await cursor.toArray();
             res.send(result);
@@ -92,7 +101,7 @@ async function run() {
 
         // // update korbo specific 1ta id ke tai find single params lagbe new lagbe
         // // to find single (read)
-        app.get('/assignment/:id', async (req, res) => {
+        app.get('/assignment/:id', logger, verifyToken, async (req, res) => {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) }
             const result = await assignmentCollection.findOne(query);
@@ -126,10 +135,8 @@ async function run() {
 
                 }
             }
+        });
 
-            const result = await assignmentCollection.updateOne(filter, assign, options);
-            res.send(result);
-        })
 
         // delete korbo specific 1ta id ke tai find single params lagbe new lagbe
 
@@ -143,32 +150,52 @@ async function run() {
         // submit assignment
 
 
-        app.get("/submitPending", async (req, res) => {
+        app.get("/submitPending", logger, verifyToken, async (req, res) => {
+            if (!req.user) {
+                return res.status(401).json({ message: 'Unauthorized' });
+            }
             const result = await submitCollection.find({ status: "Pending" }).toArray();
             console.log(result);
             res.json(result);
 
         });
-        app.get('/submit/:id', async (req, res) => {
+
+
+        app.get('/submit/:id', logger, verifyToken, async (req, res) => {
+            console.log('valid user', req.user);
+
+            // Ensure that only authenticated users can access this route
+            if (!req.user) {
+                return res.status(401).json({ message: 'Unauthorized' });
+            }
+
             const id = req.params.id;
-            const query = { _id: new ObjectId(id) }
+            const query = { _id: new ObjectId(id) }; // Ensure the submission belongs to the authenticated user
             const result = await submitCollection.findOne(query);
+
+            if (!result) {
+                return res.status(404).json({ message: 'Submission not found' });
+            }
+
             res.send(result);
-        })
-
-
-
-        app.get('/submit', async (req, res) => {
+        });
+        app.get('/submit', logger, verifyToken, async (req, res) => {
+            console.log('valid cookies', req.cookies);
+            if (!req.user) {
+                return res.status(401).json({ message: 'Unauthorized' });
+            }
             const cursor = submitCollection.find();
             const result = await cursor.toArray();
             res.send(result);
         })
-        app.get("/mySubmit/:email", async (req, res) => {
+        app.get("/mySubmit/:email", logger, verifyToken, async (req, res) => {
             console.log(req.params.email);
-            console.log('valid token user', req.user );
-            // if(req.query.email !== req.user.email){
-            //     return res.status(403).send ({message: 'forbidden'})
-            // }
+            // console.log('valid cookies', req.cookies);
+            console.log('valid user', req.user);
+
+            if (req.params.email !== req.user.email) {
+                return res.status(403).send({ message: 'forbidden' })
+            }
             const result = await submitCollection.find({ email: req.params.email }).toArray();
             res.send(result)
         })
@@ -200,10 +227,11 @@ async function run() {
             res.send(result);
         })
 
-
-
-
-
+        app.get('/features', async (req, res) => {
+            const cursor = featuresCollection.find();
+            const result = await cursor.toArray();
+            res.send(result);
+        })
 
         // Send a ping to confirm a successful connection
         // await client.db("admin").command({ ping: 1 });
