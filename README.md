@@ -1,4 +1,4 @@
-Assignment-11 Server
+server-11 Server
 This project is a server-side application built using Express.js, MongoDB, and other related technologies. It provides APIs for handling assignments, user authentication, and various features for an educational platform.
 
 ## Table of Contents
@@ -12,8 +12,8 @@ This project is a server-side application built using Express.js, MongoDB, and o
 # Installation
 To set up the project locally, follow these steps:
 1. Clone the repository:
-git clone https://github.com/yourusername/assignment-11-server.git
-cd assignment-11-server
+git clone https://github.com/yourusername/server-11.git
+cd server-11
 Install dependencies:
 
 2. npm install
